@@ -7,7 +7,10 @@
 set -euo pipefail
 
 REGION="${AWS_REGION:-us-east-1}"
-ENV_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../terraform/environments/dev" && pwd)"
+# Resolve absolute paths up front — the script cd's into ENV_DIR below, after
+# which any path relative to $BASH_SOURCE would no longer resolve.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENV_DIR="$(cd "$SCRIPT_DIR/../terraform/environments/dev" && pwd)"
 TAG="${IMAGE_TAG:-$(date +%Y%m%d)-$(git rev-parse --short HEAD 2>/dev/null || echo local)}"
 export AWS_REGION="$REGION"
 
@@ -24,7 +27,7 @@ BACKEND_REPO=$(terraform output -json ecr_repository_urls | python3 -c 'import s
 
 echo "== phase 2: build & push images (tag=$TAG) =="
 FRONTEND_REPO="$FRONTEND_REPO" BACKEND_REPO="$BACKEND_REPO" TAG="$TAG" \
-  "$(dirname "${BASH_SOURCE[0]}")/build-and-push.sh"
+  "$SCRIPT_DIR/build-and-push.sh"
 
 echo "== phase 3: full apply (RDS + ALB + ECS) =="
 terraform apply -input=false -auto-approve -var "image_tag=$TAG"
