@@ -1,12 +1,12 @@
-# Local state by default so the showcase runs with zero pre-provisioning.
-# For team use, switch to an S3 backend (bucket + DynamoDB lock table):
-#
-# terraform {
-#   backend "s3" {
-#     bucket         = "showcase-tfstate-<account-id>"
-#     key            = "ecs/dev/terraform.tfstate"
-#     region         = "us-east-1"
-#     dynamodb_table = "showcase-tf-lock"
-#     encrypt        = true
-#   }
-# }
+# Remote state in S3 with DynamoDB locking, so CI/CD and humans share one state.
+# The bucket + lock table are created out-of-band (see docs/cicd.md); they must
+# exist before `terraform init`.
+terraform {
+  backend "s3" {
+    bucket         = "showcase-tfstate-372806410594"
+    key            = "ecs/dev/terraform.tfstate"
+    region         = "us-east-1"
+    dynamodb_table = "showcase-tf-lock"
+    encrypt        = true
+  }
+}

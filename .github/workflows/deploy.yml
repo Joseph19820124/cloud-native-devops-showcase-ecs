@@ -1,12 +1,13 @@
 name: Deploy to ECS Fargate
 
-# Manual deploy. Configure an OIDC role in AWS and set AWS_DEPLOY_ROLE_ARN.
+# Runs automatically after the CI workflow succeeds on main (test gate), and can
+# also be triggered manually. Auth is GitHub OIDC -> AWS IAM role (no static keys).
 on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
-    inputs:
-      environment:
-        description: Target environment
-        default: dev
 
 permissions:
   id-token: write
@@ -18,6 +19,8 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # Deploy only when CI passed (or when invoked manually).
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     steps:
       - uses: actions/checkout@v4
 
