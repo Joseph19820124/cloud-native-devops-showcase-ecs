@@ -4,13 +4,22 @@ Two GitHub Actions workflows at the repo root (`.github/workflows/`):
 
 | Workflow | Trigger | Does |
 | -------- | ------- | ---- |
-| **CI** (`ci.yml`) | every push / PR | backend pytest, build both Docker images, `terraform validate` |
-| **Deploy** (`deploy.yml`) | after CI succeeds on `main` (or manual) | build+push images to ECR and `terraform apply` the ECS services |
+| **CI** (`ci.yml`) | every push / PR | pytest, `terraform validate`, **build both images once and push to ECR tagged with the commit SHA** (push on `main` only; PRs build to validate but don't push) |
+| **Deploy** (`deploy.yml`) | after CI succeeds on `main` (or manual) | `terraform apply -var image_tag=<sha>` — ships the image CI already built; **no rebuild** |
 
-App-only changes never touch infrastructure by hand: you push code, CI gates it,
-and Deploy rolls a new ECS task-definition revision. Terraform still runs on
-deploy, but the plan is limited to the new image tag + service update — the VPC,
-RDS, ALB, IAM and cluster are a no-op diff.
+**Build once, deploy the tested artifact.** The image is built a single time in
+CI, tagged with the commit SHA, and pushed to ECR. Deploy never rebuilds — it
+just points Terraform at that exact SHA. So the image you deploy is byte-for-byte
+the one CI tested (no risk of a floating base image drifting between two builds),
+and there's no wasted double build.
+
+App-only changes never touch infrastructure by hand: you push code, CI gates it
+and publishes the image, and Deploy rolls a new ECS task-definition revision.
+Terraform still runs on deploy, but the plan is limited to the new image tag +
+service update — the VPC, RDS, ALB, IAM and cluster are a no-op diff.
+
+> `scripts/deploy.sh` remains a convenience for a one-command **local** deploy
+> (it builds, pushes, and applies in one go). CI/CD uses the split above instead.
 
 ## What backs it
 

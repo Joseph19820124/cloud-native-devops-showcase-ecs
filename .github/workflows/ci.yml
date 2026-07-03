@@ -21,15 +21,6 @@ jobs:
       - name: Run tests
         run: python -m pytest -q
 
-  docker-build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Build backend image
-        run: docker build ecs-showcase/app/backend
-      - name: Build frontend image
-        run: docker build ecs-showcase/app/frontend
-
   terraform-validate:
     runs-on: ubuntu-latest
     steps:
@@ -42,3 +33,38 @@ jobs:
         run: terraform -chdir=ecs-showcase/terraform/environments/dev init -backend=false
       - name: validate
         run: terraform -chdir=ecs-showcase/terraform/environments/dev validate
+
+  # Build the images ONCE here and push them to ECR tagged with the commit SHA.
+  # The Deploy workflow then ships this exact artifact — no second build.
+  # On pull requests we build (to validate the Dockerfiles) but do not push.
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      AWS_REGION: us-east-1
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build images
+        run: |
+          docker build --platform linux/amd64 -t backend-ci  ecs-showcase/app/backend
+          docker build --platform linux/amd64 -t frontend-ci ecs-showcase/app/frontend
+
+      - name: Configure AWS credentials
+        if: github.event_name == 'push'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Tag & push to ECR (main only)
+        if: github.event_name == 'push'
+        run: |
+          REG="$(aws sts get-caller-identity --query Account --output text).dkr.ecr.${AWS_REGION}.amazonaws.com"
+          aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$REG"
+          for svc in backend frontend; do
+            docker tag  "${svc}-ci" "$REG/showcase-dev/${svc}:${GITHUB_SHA}"
+            docker push "$REG/showcase-dev/${svc}:${GITHUB_SHA}"
+          done

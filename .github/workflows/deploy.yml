@@ -1,7 +1,8 @@
 name: Deploy to ECS Fargate
 
-# Runs automatically after the CI workflow succeeds on main (test gate), and can
-# also be triggered manually. Auth is GitHub OIDC -> AWS IAM role (no static keys).
+# Runs after the CI workflow succeeds on main (CI already built & pushed the
+# image tagged with the commit SHA). This job does NOT rebuild — it just applies
+# Terraform pointing at that exact image. Auth is GitHub OIDC -> AWS IAM role.
 on:
   workflow_run:
     workflows: ["CI"]
@@ -23,6 +24,8 @@ jobs:
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -32,9 +35,11 @@ jobs:
 
       - uses: hashicorp/setup-terraform@v3
 
-      - name: Deploy
-        working-directory: ecs-showcase
+      - name: Terraform apply (ship the image CI already built)
+        working-directory: ecs-showcase/terraform/environments/dev
         env:
           TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
-          IMAGE_TAG: ${{ github.sha }}
-        run: ./scripts/deploy.sh
+          IMAGE_TAG: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          terraform init -input=false
+          terraform apply -input=false -auto-approve -var "image_tag=${IMAGE_TAG}"
