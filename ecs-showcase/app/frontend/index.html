@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Hello World - Cloud Native DevOps Showcase</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 640px; margin: 40px auto; padding: 0 16px; }
+    h1 { font-size: 1.5rem; }
+    #greeting { color: #2563eb; font-weight: 600; }
+    ul { padding-left: 1.2rem; }
+    form { display: flex; gap: 8px; margin: 16px 0; }
+    input { flex: 1; padding: 8px; }
+    button { padding: 8px 16px; }
+  </style>
+</head>
+<body>
+  <h1>Cloud Native DevOps Showcase</h1>
+  <p>Backend says: <span id="greeting">loading...</span></p>
+
+  <form id="message-form">
+    <input id="message-input" type="text" placeholder="Say something" required />
+    <button type="submit">Add</button>
+  </form>
+
+  <h2>Messages</h2>
+  <ul id="message-list"></ul>
+
+  <script>
+    const API_BASE = window.API_BASE || "/api";
+
+    async function loadHello() {
+      const res = await fetch(`${API_BASE}/hello`);
+      const data = await res.json();
+      document.getElementById("greeting").textContent = `${data.message} (env: ${data.env})`;
+    }
+
+    async function loadMessages() {
+      const res = await fetch(`${API_BASE}/messages`);
+      const data = await res.json();
+      const list = document.getElementById("message-list");
+      list.innerHTML = "";
+      for (const m of data.messages) {
+        const li = document.createElement("li");
+        li.textContent = m.text;
+        list.appendChild(li);
+      }
+    }
+
+    document.getElementById("message-form").addEventListener("submit", async (evt) => {
+      evt.preventDefault();
+      const input = document.getElementById("message-input");
+      await fetch(`${API_BASE}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: input.value }),
+      });
+      input.value = "";
+      await loadMessages();
+    });
+
+    loadHello();
+    loadMessages();
+  </script>
+</body>
+</html>

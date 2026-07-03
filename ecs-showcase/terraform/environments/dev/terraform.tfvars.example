@@ -1,0 +1,12 @@
+environment = "dev"
+aws_region  = "us-east-1"
+
+# REQUIRED: database password (do not commit the real file).
+db_password = "change-me-please"
+
+# Set by scripts/deploy.sh to the freshly-pushed image tag.
+# image_tag = "20260703-abcdef"
+
+# Cheaper throwaway option: skip the NAT gateway and run tasks in public subnets.
+# single_nat_gateway = false
+# assign_public_ip   = true
