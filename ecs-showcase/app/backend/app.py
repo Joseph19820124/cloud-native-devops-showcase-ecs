@@ -83,6 +83,7 @@ def hello():
         message="Hello, World!",
         env=os.environ.get("APP_ENV", "local"),
         platform="ecs-fargate",
+        version="1.1",
     )
 
 
