@@ -1,8 +1,9 @@
 name: Deploy to ECS Fargate
 
-# Runs after the CI workflow succeeds on main (CI already built & pushed the
-# image tagged with the commit SHA). This job does NOT rebuild — it just applies
-# Terraform pointing at that exact image. Auth is GitHub OIDC -> AWS IAM role.
+# Runs after CI succeeds on main (CI already built & pushed the changed images).
+# This job does NOT rebuild — it applies Terraform with a per-service image tag
+# (SHA of the last commit that touched each service), so only the service whose
+# code actually changed gets a new task revision. Auth is GitHub OIDC.
 on:
   workflow_run:
     workflows: ["CI"]
@@ -20,12 +21,17 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    # Deploy only when CI passed (or when invoked manually).
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Compute per-service image tags
+        run: |
+          echo "BACKEND_TAG=$(git log -1 --format=%H -- ecs-showcase/app/backend)"   >> "$GITHUB_ENV"
+          echo "FRONTEND_TAG=$(git log -1 --format=%H -- ecs-showcase/app/frontend)" >> "$GITHUB_ENV"
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -35,11 +41,14 @@ jobs:
 
       - uses: hashicorp/setup-terraform@v3
 
-      - name: Terraform apply (ship the image CI already built)
+      - name: Terraform apply (per-service tags, ship what CI built)
         working-directory: ecs-showcase/terraform/environments/dev
         env:
           TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
-          IMAGE_TAG: ${{ github.event.workflow_run.head_sha || github.sha }}
         run: |
+          echo "backend_image_tag=$BACKEND_TAG"
+          echo "frontend_image_tag=$FRONTEND_TAG"
           terraform init -input=false
-          terraform apply -input=false -auto-approve -var "image_tag=${IMAGE_TAG}"
+          terraform apply -input=false -auto-approve \
+            -var "backend_image_tag=$BACKEND_TAG" \
+            -var "frontend_image_tag=$FRONTEND_TAG"

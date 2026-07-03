@@ -30,7 +30,10 @@ FRONTEND_REPO="$FRONTEND_REPO" BACKEND_REPO="$BACKEND_REPO" TAG="$TAG" \
   "$SCRIPT_DIR/build-and-push.sh"
 
 echo "== phase 3: full apply (RDS + ALB + ECS) =="
-terraform apply -input=false -auto-approve -var "image_tag=$TAG"
+# Local one-shot builds & pushes both images under one tag, so both services
+# move together here. CI/CD instead sets per-service tags (see workflows).
+terraform apply -input=false -auto-approve \
+  -var "backend_image_tag=$TAG" -var "frontend_image_tag=$TAG"
 
 echo
 terraform output alb_url

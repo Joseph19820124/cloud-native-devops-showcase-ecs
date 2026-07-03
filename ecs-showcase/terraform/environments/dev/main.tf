@@ -89,8 +89,8 @@ module "ecs" {
   frontend_target_group_arn = module.alb.frontend_target_group_arn
   frontend_port             = var.frontend_port
 
-  frontend_image = "${module.ecr.repository_urls["frontend"]}:${var.image_tag}"
-  backend_image  = "${module.ecr.repository_urls["backend"]}:${var.image_tag}"
+  frontend_image = "${module.ecr.repository_urls["frontend"]}:${var.frontend_image_tag}"
+  backend_image  = "${module.ecr.repository_urls["backend"]}:${var.backend_image_tag}"
 
   frontend_desired_count = var.frontend_desired_count
   backend_desired_count  = var.backend_desired_count

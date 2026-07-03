@@ -43,8 +43,18 @@ variable "frontend_port" {
   default = 8080
 }
 
-variable "image_tag" {
-  description = "Container image tag deployed to ECS (set by the deploy script)"
+# Per-service image tags so only the service whose code changed gets a new task
+# revision. CI/CD sets each to the SHA of the last commit that touched that
+# service's app dir (see .github/workflows). Unchanged service keeps its tag ->
+# Terraform no-op -> it does not roll.
+variable "backend_image_tag" {
+  description = "Image tag (commit SHA) for the backend service"
+  type        = string
+  default     = "latest"
+}
+
+variable "frontend_image_tag" {
+  description = "Image tag (commit SHA) for the frontend service"
   type        = string
   default     = "latest"
 }

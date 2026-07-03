@@ -4,14 +4,20 @@ Two GitHub Actions workflows at the repo root (`.github/workflows/`):
 
 | Workflow | Trigger | Does |
 | -------- | ------- | ---- |
-| **CI** (`ci.yml`) | every push / PR | pytest, `terraform validate`, **build both images once and push to ECR tagged with the commit SHA** (push on `main` only; PRs build to validate but don't push) |
-| **Deploy** (`deploy.yml`) | after CI succeeds on `main` (or manual) | `terraform apply -var image_tag=<sha>` — ships the image CI already built; **no rebuild** |
+| **CI** (`ci.yml`) | every push / PR | pytest, `terraform validate`, **build both images and push each to ECR tagged per-service** (push on `main` only; PRs build to validate but don't push) |
+| **Deploy** (`deploy.yml`) | after CI succeeds on `main` (or manual) | `terraform apply` with per-service image tags — ships what CI built; **no rebuild** |
 
-**Build once, deploy the tested artifact.** The image is built a single time in
-CI, tagged with the commit SHA, and pushed to ECR. Deploy never rebuilds — it
-just points Terraform at that exact SHA. So the image you deploy is byte-for-byte
-the one CI tested (no risk of a floating base image drifting between two builds),
-and there's no wasted double build.
+**Build once, deploy the tested artifact.** The image is built in CI and pushed
+to ECR; Deploy never rebuilds — it points Terraform at the exact image CI built.
+So the image you deploy is byte-for-byte the one CI tested (no floating base
+image drifting between two builds), with no wasted double build.
+
+**Per-service deploys.** Each service's image tag is the SHA of the *last commit
+that touched that service's `app/` dir* — CI and Deploy both derive it with
+`git log -1 --format=%H -- ecs-showcase/app/<svc>` (hence `fetch-depth: 0`).
+Change only `app/backend`, and only `backend_image_tag` moves: CI skips pushing
+the unchanged frontend (its tag already exists in ECR) and Terraform rolls only
+the backend service — the frontend task-definition revision stays put.
 
 App-only changes never touch infrastructure by hand: you push code, CI gates it
 and publishes the image, and Deploy rolls a new ECS task-definition revision.

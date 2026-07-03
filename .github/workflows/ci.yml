@@ -34,9 +34,11 @@ jobs:
       - name: validate
         run: terraform -chdir=ecs-showcase/terraform/environments/dev validate
 
-  # Build the images ONCE here and push them to ECR tagged with the commit SHA.
-  # The Deploy workflow then ships this exact artifact — no second build.
-  # On pull requests we build (to validate the Dockerfiles) but do not push.
+  # Build both images (validates the Dockerfiles), then push each service to ECR
+  # tagged with the SHA of the last commit that touched THAT service's app dir.
+  # A service whose code didn't change keeps the same tag, so its image is
+  # already in ECR and we skip the push — and Deploy won't roll it.
+  # On pull requests we build to validate but do not push.
   build-and-push:
     runs-on: ubuntu-latest
     permissions:
@@ -46,6 +48,8 @@ jobs:
       AWS_REGION: us-east-1
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Build images
         run: |
@@ -59,12 +63,18 @@ jobs:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Tag & push to ECR (main only)
+      - name: Push changed services to ECR (main only)
         if: github.event_name == 'push'
         run: |
           REG="$(aws sts get-caller-identity --query Account --output text).dkr.ecr.${AWS_REGION}.amazonaws.com"
           aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$REG"
           for svc in backend frontend; do
-            docker tag  "${svc}-ci" "$REG/showcase-dev/${svc}:${GITHUB_SHA}"
-            docker push "$REG/showcase-dev/${svc}:${GITHUB_SHA}"
+            TAG=$(git log -1 --format=%H -- "ecs-showcase/app/$svc")
+            if aws ecr describe-images --repository-name "showcase-dev/$svc" --image-ids imageTag="$TAG" >/dev/null 2>&1; then
+              echo "== $svc: image $TAG already in ECR — unchanged, skip push =="
+            else
+              echo "== $svc: pushing new image $TAG =="
+              docker tag  "${svc}-ci" "$REG/showcase-dev/$svc:$TAG"
+              docker push "$REG/showcase-dev/$svc:$TAG"
+            fi
           done
