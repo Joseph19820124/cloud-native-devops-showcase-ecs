@@ -79,7 +79,11 @@ def ready():
 
 @app.get("/api/hello")
 def hello():
-    return jsonify(message="Hello, World!", env=os.environ.get("APP_ENV", "local"))
+    return jsonify(
+        message="Hello, World!",
+        env=os.environ.get("APP_ENV", "local"),
+        platform="ecs-fargate",
+    )
 
 
 @app.get("/api/messages")

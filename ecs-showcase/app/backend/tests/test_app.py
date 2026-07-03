@@ -14,6 +14,7 @@ def test_hello():
     assert resp.status_code == 200
     body = resp.get_json()
     assert body["message"] == "Hello, World!"
+    assert body["platform"] == "ecs-fargate"
 
 
 def test_create_message_requires_text():
