@@ -70,6 +70,13 @@ Tear everything down:
 ./scripts/destroy.sh
 ```
 
+## Verified on real Fargate
+
+This stack was deployed end-to-end on AWS (2 Fargate tasks + ALB + RDS + NAT) and
+served live traffic through the ALB. Quota observations from that run — including
+the *Fargate On-Demand vCPU* limit and an Elastic-IP gotcha — are written up in
+[`ecs-showcase/docs/quota-check.md`](ecs-showcase/docs/quota-check.md).
+
 ## Sizing & cost notes
 
 * Both services run **256 CPU / 512 MB** Fargate tasks (0.25 vCPU each) — small
