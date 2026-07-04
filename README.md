@@ -33,15 +33,16 @@ ecs-showcase/
 ## Architecture
 
 ```
-Internet → ALB (:80, public subnets)
-             → frontend Fargate task (nginx :8080)
-                → http://backend:5000  (ECS Service Connect)
-                   → backend Fargate task (gunicorn :5000)
-                      → RDS PostgreSQL (:5432, private subnets)
+Internet / browser → ALB (:80, public subnets)  ── path routing ──┐
+                        │ "/"                        "/api/*","/health"
+              frontend TG → nginx :8080        backend TG → gunicorn :5000
+              (static site)                                    → RDS (:5432, private)
 ```
 
-The frontend finds the backend by the DNS name `backend` published through **ECS
-Service Connect**, so `nginx.conf` is identical to the Kubernetes version.
+Both services sit behind **one ALB** with path-based routing — the ECS analog of
+a Kubernetes Ingress fanning out to two Services. The frontend is static; the
+browser calls `/api/...` on the same ALB host and the ALB sends it straight to
+the backend target group (no Service Connect hop).
 
 ## Deploy
 

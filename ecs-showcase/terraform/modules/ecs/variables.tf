@@ -33,9 +33,8 @@ variable "frontend_target_group_arn" {
   type = string
 }
 
-variable "service_connect_namespace" {
-  type    = string
-  default = "showcase.local"
+variable "backend_target_group_arn" {
+  type = string
 }
 
 # Images (ECR repo URL + tag)

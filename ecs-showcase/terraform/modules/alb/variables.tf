@@ -15,6 +15,11 @@ variable "frontend_port" {
   default = 8080
 }
 
+variable "backend_port" {
+  type    = number
+  default = 5000
+}
+
 variable "tags" {
   type    = map(string)
   default = {}

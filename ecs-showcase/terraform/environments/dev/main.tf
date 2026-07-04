@@ -87,6 +87,7 @@ module "ecs" {
   assign_public_ip          = var.assign_public_ip
   alb_security_group_id     = module.alb.alb_security_group_id
   frontend_target_group_arn = module.alb.frontend_target_group_arn
+  backend_target_group_arn  = module.alb.backend_target_group_arn
   frontend_port             = var.frontend_port
 
   frontend_image = "${module.ecr.repository_urls["frontend"]}:${var.frontend_image_tag}"

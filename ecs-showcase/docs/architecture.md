@@ -4,29 +4,33 @@ This is the **ECS Fargate** edition of the cloud-native DevOps showcase. It runs
 the exact same two-tier "hello world" app as the EKS edition, but replaces the
 Kubernetes control plane and worker nodes with serverless ECS Fargate tasks.
 
+Both services are published through **one ALB** with path-based routing — the
+ECS equivalent of a Kubernetes Ingress fanning out to two Services:
+
 ```
-                 Internet
-                    │
-              ┌─────▼─────┐
-              │    ALB    │  (public subnets, HTTP :80)
-              └─────┬─────┘
-                    │ target group (ip)
-          ┌─────────▼──────────┐
-          │  frontend service  │  Fargate task, nginx :8080
-          │  (Service Connect  │
-          │      client)       │
-          └─────────┬──────────┘
-                    │ http://backend:5000  (Service Connect DNS)
-          ┌─────────▼──────────┐
-          │  backend service   │  Fargate task, gunicorn/Flask :5000
-          │  (Service Connect  │
-          │   server "backend")│
-          └─────────┬──────────┘
-                    │ :5432
-              ┌─────▼─────┐
-              │    RDS    │  PostgreSQL (private subnets)
-              └───────────┘
+                        Internet / browser
+                              │  HTTP :80
+                        ┌─────▼─────┐
+                        │    ALB    │  (public subnets)
+                        └─────┬─────┘
+              path routing on the :80 listener
+        ┌───────────────────┴────────────────────┐
+    default │ "/"                       "/api/*", "/health" │
+   ┌────────▼─────────┐                 ┌──────────▼─────────┐
+   │ frontend TG      │                 │ backend TG         │
+   │ frontend service │                 │ backend service    │
+   │ nginx :8080      │                 │ gunicorn/Flask :5000│
+   │ (static site)    │                 └──────────┬─────────┘
+   └──────────────────┘                            │ :5432
+                                             ┌──────▼──────┐
+                                             │    RDS      │ (private subnets)
+                                             └─────────────┘
 ```
+
+The frontend is a **static** site; the browser calls `/api/...` on the same ALB
+host and the ALB routes it straight to the backend target group. There is no
+service-to-service (Service Connect) hop — frontend↔backend goes through the ALB,
+exactly like both Services sitting behind one Ingress.
 
 ## How this maps from the EKS version
 
@@ -35,16 +39,16 @@ Kubernetes control plane and worker nodes with serverless ECS Fargate tasks.
 | EKS cluster + managed node group     | `aws_ecs_cluster` (FARGATE capacity providers)  |
 | `Deployment`                         | `aws_ecs_task_definition` + `aws_ecs_service`   |
 | Pod                                  | Fargate task (ENI in `awsvpc` mode)             |
-| `Service` (ClusterIP) named backend  | ECS **Service Connect** service `backend:5000`  |
-| `Ingress` / ingress-controller       | Application Load Balancer + listener            |
+| `Ingress` fan-out (`/` and `/api`)   | **ALB listener + path rules → 2 target groups** |
+| `Service` (frontend / backend)       | ALB target group per service                    |
 | `readinessProbe` / `livenessProbe`   | container `healthCheck` + ALB target-group HC   |
 | `ConfigMap` / `Secret`               | task-definition `environment` (see note)        |
 | `HorizontalPodAutoscaler`            | Application Auto Scaling on the ECS service      |
 | requests/limits (`cpu`/`memory`)     | task `cpu` / `memory` (Fargate sizing)          |
 | container images in ECR              | unchanged — same ECR repos                       |
 
-`nginx.conf` is unchanged: it still proxies to `http://backend:5000`, because
-Service Connect publishes that exact DNS name inside the cluster.
+Because the ALB owns the `/api` routing, `nginx.conf` is a plain static-file
+server — it no longer proxies to the backend.
 
 ## Networking
 

@@ -1,5 +1,5 @@
 ##############################################################################
-# ECS Fargate cluster + Service Connect namespace
+# ECS Fargate cluster
 ##############################################################################
 
 resource "aws_ecs_cluster" "this" {
@@ -24,14 +24,10 @@ resource "aws_ecs_cluster_capacity_providers" "this" {
   }
 }
 
-# Cloud Map HTTP namespace backs ECS Service Connect. The frontend reaches the
-# backend at http://backend:5000 through this namespace — the same DNS name the
-# original k8s Service exposed, so nginx.conf is unchanged.
-resource "aws_service_discovery_http_namespace" "this" {
-  name        = var.service_connect_namespace
-  description = "Service Connect namespace for ${var.name_prefix}"
-  tags        = var.tags
-}
+# Both services are published through the ALB (like a k8s Ingress fanning out to
+# two Services): "/" -> frontend, "/api/*" & "/health" -> backend. The frontend
+# is static; the browser calls /api on the same ALB host, so there is no
+# service-to-service (Service Connect) hop anymore.
 
 ##############################################################################
 # IAM roles
@@ -98,11 +94,11 @@ resource "aws_security_group" "tasks" {
   }
 
   ingress {
-    description = "Intra-service traffic (Service Connect)"
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    self        = true
+    description     = "Backend port from the ALB"
+    from_port       = 5000
+    to_port         = 5000
+    protocol        = "tcp"
+    security_groups = [var.alb_security_group_id]
   }
 
   egress {
@@ -116,7 +112,7 @@ resource "aws_security_group" "tasks" {
 }
 
 ##############################################################################
-# Backend service (Service Connect server, discoverable as "backend")
+# Backend service (published on the ALB under /api/* and /health)
 ##############################################################################
 
 resource "aws_ecs_task_definition" "backend" {
@@ -182,25 +178,17 @@ resource "aws_ecs_service" "backend" {
     assign_public_ip = var.assign_public_ip
   }
 
-  service_connect_configuration {
-    enabled   = true
-    namespace = aws_service_discovery_http_namespace.this.arn
-
-    service {
-      port_name      = "backend"
-      discovery_name = "backend"
-      client_alias {
-        port     = 5000
-        dns_name = "backend"
-      }
-    }
+  load_balancer {
+    target_group_arn = var.backend_target_group_arn
+    container_name   = "backend"
+    container_port   = 5000
   }
 
   tags = var.tags
 }
 
 ##############################################################################
-# Frontend service (Service Connect client, fronted by the ALB)
+# Frontend service (published on the ALB as the default "/" backend)
 ##############################################################################
 
 resource "aws_ecs_task_definition" "frontend" {
@@ -251,19 +239,11 @@ resource "aws_ecs_service" "frontend" {
     assign_public_ip = var.assign_public_ip
   }
 
-  service_connect_configuration {
-    enabled   = true
-    namespace = aws_service_discovery_http_namespace.this.arn
-  }
-
   load_balancer {
     target_group_arn = var.frontend_target_group_arn
     container_name   = "frontend"
     container_port   = var.frontend_port
   }
-
-  # Give the ALB listener time to exist before registering targets.
-  depends_on = [aws_ecs_service.backend]
 
   tags = var.tags
 }
